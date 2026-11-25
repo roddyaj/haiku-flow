@@ -43,6 +43,12 @@ export interface RepoStatus {
   issue: IssueRef | null;
 }
 
+export interface BranchList {
+  local: string[];
+  /** Remote-tracking branches as `remote/name`. */
+  remote: string[];
+}
+
 export type MrState = "open" | "draft" | "merged" | "closed";
 
 export interface MrInfo {
@@ -87,12 +93,16 @@ export const api = {
   listRepos: () => invoke<RepoEntry[]>("list_repos"),
   repoStatus: (path: string) => invoke<RepoStatus>("repo_status", { path }),
   fetchRepo: (path: string) => invoke<void>("fetch_repo", { path }),
+  listBranches: (path: string) => invoke<BranchList>("list_branches", { path }),
+  checkoutBranch: (path: string, name: string, remote: boolean) =>
+    invoke<void>("checkout_branch", { path, name, remote }),
+  pullRepo: (path: string) => invoke<void>("pull_repo", { path }),
   setHidden: (path: string, hidden: boolean) =>
     invoke<void>("set_hidden", { path, hidden }),
   setManualIssue: (path: string, branch: string, issue: number | null) =>
     invoke<void>("set_manual_issue", { path, branch, issue }),
-  issueDetails: (project: string, iid: number, branch: string | null) =>
-    invoke<IssueDetails>("issue_details", { project, iid, branch }),
+  issueDetails: (project: string, iid: number) =>
+    invoke<IssueDetails>("issue_details", { project, iid }),
   listDone: () => invoke<DoneItem[]>("list_done"),
   markDone: (item: NewDoneItem) => invoke<void>("mark_done", { item }),
   undoDone: (project: string, iid: number) =>

@@ -4,10 +4,15 @@
   --border: #dfe2e8;
   --text: #1c1f24;
   --muted: #6b7280;
+  --soft: #4b5563;
   --accent: #2563eb;
   --ok: #15803d;
   --warn: #b45309;
   --danger: #b91c1c;
+  --window-border: #7d8594;
+  --btn-bg: #e9ecf1;
+  --btn-border: #aeb6c4;
+  --merged: #7c3aed;
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
@@ -22,10 +27,15 @@
     --border: #2f343d;
     --text: #e6e8ec;
     --muted: #8b93a1;
+    --soft: #c9cdd6;
     --accent: #6ea0ff;
     --ok: #4ade80;
     --warn: #fbbf24;
     --danger: #f87171;
+    --window-border: #505664;
+    --btn-bg: #2d323d;
+    --btn-border: #565e70;
+    --merged: #c4a7ff;
   }
 }
 
@@ -36,6 +46,16 @@
 body {
   margin: 0;
   background: var(--bg);
+}
+
+/* Border drawn inside the window edge so the app stands out among dark windows. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  border: 2px solid var(--window-border);
+  pointer-events: none;
 }
 
 h1 {
@@ -55,15 +75,17 @@ a:hover {
 button {
   font: inherit;
   color: inherit;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
   border-radius: 6px;
-  padding: 3px 10px;
+  padding: 3px 12px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.12);
   cursor: pointer;
 }
 
 button:hover:not(:disabled) {
   border-color: var(--accent);
+  color: var(--accent);
 }
 
 button:disabled {
@@ -77,9 +99,15 @@ button.primary {
   color: #fff;
 }
 
+button.primary:hover:not(:disabled) {
+  color: #fff;
+  filter: brightness(1.1);
+}
+
 button.link {
   background: none;
   border: none;
+  box-shadow: none;
   color: var(--accent);
   padding: 0 4px;
 }
@@ -119,9 +147,9 @@ code {
 
 .topbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 24px;
-  padding: 10px 16px;
+  padding: 8px 16px 0;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -130,13 +158,28 @@ code {
 }
 
 .tab {
-  border: none;
-  background: none;
   margin-right: 4px;
+  margin-bottom: -1px;
+  padding: 6px 16px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 6px 6px 0 0;
+  box-shadow: none;
+  color: var(--muted);
 }
 
-.tab.active {
+.tab:hover:not(:disabled) {
+  color: var(--text);
+  border-color: transparent;
   background: var(--panel);
+}
+
+.tab.active,
+.tab.active:hover:not(:disabled) {
+  background: var(--panel);
+  border-bottom-color: var(--accent);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -161,17 +204,36 @@ main {
   gap: 6px;
 }
 
+input[type="checkbox"],
+label:has(> input[type="checkbox"]) {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+/* One shared grid so columns line up across rows. Identity, badge, and MR columns size to their
+   content up to a cap and wrap when space is tight; the issue column takes the rest. */
 .repos {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: fit-content(200px) fit-content(260px) minmax(160px, 1fr) fit-content(140px) auto;
+  column-gap: 12px;
+  row-gap: 6px;
 }
 
 .repo {
   display: grid;
-  grid-template-columns: minmax(120px, 1.2fr) minmax(120px, 1fr) minmax(160px, 1.6fr) minmax(80px, 0.7fr) auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 12px;
+  row-gap: 4px;
   padding: 8px 12px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -195,6 +257,7 @@ main {
 }
 
 .name {
+  margin-bottom: 4px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -202,7 +265,7 @@ main {
 }
 
 .branch {
-  color: var(--muted);
+  color: var(--soft);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   overflow: hidden;
@@ -241,12 +304,26 @@ main {
   font-weight: 600;
 }
 
+/* Keep the issue cell on one line; only the title shrinks, and only when space runs out. */
+.cell.issue {
+  flex-wrap: nowrap;
+}
+
+.cell.issue > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.cell.issue > .issue-title {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
 .issue-title {
-  color: var(--muted);
+  color: var(--soft);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 260px;
 }
 
 .issue-form {
@@ -287,7 +364,7 @@ main {
 }
 
 .mr.merged {
-  color: #8b5cf6;
+  color: var(--merged);
 }
 
 .mr.closed {
@@ -385,4 +462,86 @@ main {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.branch-picker {
+  position: relative;
+}
+
+.branch-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  max-width: 100%;
+  color: var(--soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-btn:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  width: 280px;
+  padding: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+.popover input {
+  width: 100%;
+}
+
+.options {
+  max-height: 280px;
+  margin-top: 6px;
+  overflow-y: auto;
+}
+
+.caret {
+  margin-left: 4px;
+  font-size: 15px;
+  line-height: 1;
+  vertical-align: -1px;
+}
+
+.option {
+  display: block;
+  box-shadow: none;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.option:hover {
+  background: var(--panel);
+}
+
+.group {
+  padding: 6px 8px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.pad {
+  padding: 4px 8px;
 }

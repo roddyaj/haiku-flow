@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "haiku-flow",
-        "width": 800,
-        "height": 600
+        "title": "Haiku Flow",
+        "width": 1024,
+        "height": 720
       }
     ],
     "security": {

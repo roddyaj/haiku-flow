@@ -12,7 +12,7 @@ export function Setup() {
 
   return (
     <div className="setup">
-      <h1>Welcome to haiku-flow</h1>
+      <h1>Welcome to Haiku Flow</h1>
       <p className="muted">
         Pick the folders that contain your git repos and your GitLab host. You
         can change these later in Settings.

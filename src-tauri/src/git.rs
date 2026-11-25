@@ -84,6 +84,42 @@ pub fn fetch(path: &Path) -> Result<(), String> {
     run(path, &["fetch", "--all", "--prune"]).map(|_| ())
 }
 
+/// Local and remote branches of a repo.
+#[derive(Clone, Debug, Default, Serialize, PartialEq)]
+pub struct BranchList {
+    pub local: Vec<String>,
+    /// Remote-tracking branches as `remote/name`, excluding any that have a local branch of the same name.
+    pub remote: Vec<String>,
+}
+
+/// List the repo's local and remote branches.
+pub fn list_branches(path: &Path) -> Result<BranchList, String> {
+    run(
+        path,
+        &["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"],
+    )
+    .map(|out| parse_branches(&out))
+}
+
+/// Check out a branch. A remote branch (`remote/name`) gets a local tracking branch.
+pub fn checkout(path: &Path, name: &str, remote: bool) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() || name.starts_with('-') {
+        return Err("Invalid branch name".to_string());
+    }
+    let args: &[&str] = if remote {
+        &["checkout", "--track", name]
+    } else {
+        &["checkout", name]
+    };
+    run(path, args).map(|_| ())
+}
+
+/// Fast-forward the current branch from its upstream.
+pub fn pull(path: &Path) -> Result<(), String> {
+    run(path, &["pull", "--ff-only"]).map(|_| ())
+}
+
 /// Gather the status of the repo at `path`.
 pub fn status(path: &Path, ctx: &StatusContext) -> RepoStatus {
     let branch = current_branch(path);
@@ -164,6 +200,24 @@ pub fn parse_left_right(out: &str) -> Option<(u32, u32)> {
     let left = parts.next()?.parse().ok()?;
     let right = parts.next()?.parse().ok()?;
     parts.next().is_none().then_some((left, right))
+}
+
+/// Parse `for-each-ref --format=%(refname)` output into local and remote branches.
+pub fn parse_branches(out: &str) -> BranchList {
+    let mut list = BranchList::default();
+    for line in out.lines().map(str::trim) {
+        if let Some(name) = line.strip_prefix("refs/heads/") {
+            list.local.push(name.to_string());
+        } else if let Some(name) = line.strip_prefix("refs/remotes/") {
+            if !name.ends_with("/HEAD") && name.contains('/') {
+                list.remote.push(name.to_string());
+            }
+        }
+    }
+    let local = &list.local;
+    list.remote
+        .retain(|r| r.split_once('/').is_none_or(|(_, b)| !local.iter().any(|l| l == b)));
+    list
 }
 
 /// Parse `refs/remotes/origin/<branch>` into the branch name.
@@ -273,6 +327,67 @@ mod tests {
         );
         assert_eq!(parse_default_branch("refs/heads/main"), None);
         assert_eq!(parse_default_branch(""), None);
+    }
+
+    #[test]
+    fn branches_split_local_and_remote_and_drop_duplicates() {
+        let out = "refs/heads/main\nrefs/heads/dev\nrefs/remotes/origin/HEAD\n\
+                   refs/remotes/origin/main\nrefs/remotes/origin/feature/x\n\
+                   refs/remotes/up/dev\nrefs/remotes/origin\n";
+        let list = parse_branches(out);
+        assert_eq!(list.local, ["main", "dev"]);
+        assert_eq!(list.remote, ["origin/feature/x"]);
+    }
+
+    #[test]
+    fn checkout_rejects_option_like_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(checkout(tmp.path(), "--detach", false).is_err());
+        assert!(checkout(tmp.path(), "  ", false).is_err());
+    }
+
+    #[test]
+    fn checkout_and_pull_work_on_real_repos() {
+        let tmp = tempfile::tempdir().unwrap();
+        let origin = tmp.path().join("origin.git");
+        let work = tmp.path().join("work");
+        let other = tmp.path().join("other");
+        std::fs::create_dir_all(&origin).unwrap();
+        g(&origin, &["init", "--bare", "-b", "main"]);
+        g(tmp.path(), &["clone", origin.to_str().unwrap(), "work"]);
+        g(&work, &["commit", "--allow-empty", "-m", "one"]);
+        g(&work, &["push", "-u", "origin", "main"]);
+
+        // Another clone publishes a feature branch.
+        g(tmp.path(), &["clone", origin.to_str().unwrap(), "other"]);
+        g(&other, &["checkout", "-b", "feature"]);
+        g(&other, &["commit", "--allow-empty", "-m", "f1"]);
+        g(&other, &["push", "-u", "origin", "feature"]);
+
+        fetch(&work).unwrap();
+        let list = list_branches(&work).unwrap();
+        assert_eq!(list.local, ["main"]);
+        assert_eq!(list.remote, ["origin/feature"]);
+
+        // Checking out the remote branch creates a tracking branch.
+        checkout(&work, "origin/feature", true).unwrap();
+        assert_eq!(current_branch(&work), "feature");
+        let list = list_branches(&work).unwrap();
+        assert_eq!(list.local, ["feature", "main"]);
+        assert!(list.remote.is_empty());
+
+        // Back to a local branch by name.
+        checkout(&work, "main", false).unwrap();
+        assert_eq!(current_branch(&work), "main");
+        assert!(checkout(&work, "no-such-branch", false).is_err());
+
+        // Pull fast-forwards after the other clone pushes more.
+        g(&other, &["commit", "--allow-empty", "-m", "f2"]);
+        g(&other, &["push", "origin", "feature"]);
+        checkout(&work, "feature", false).unwrap();
+        pull(&work).unwrap();
+        let log = run(&work, &["log", "--format=%s", "-1"]).unwrap();
+        assert_eq!(log, "f2");
     }
 
     #[test]

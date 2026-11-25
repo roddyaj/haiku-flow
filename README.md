@@ -40,8 +40,9 @@ contain your repos, and set your GitLab host. Change these later in Settings.
 - **✓**: in sync and clean.
 - **Issue**: parsed from a branch like `123-fix-thing`, or entered by hand with
   “+ issue” (remembered per repo and branch). With a token, the title is shown.
-- **MR**: merge requests related to the issue, with state (open, draft, merged,
-  closed).
+- **MR**: merge requests for the issue, with state (open, draft, merged,
+  closed). Only MRs whose title starts with `#<issue> ` or whose description
+  contains `Closes #<issue>` are shown; a merely linked MR is not.
 - **Fetch** and **Fetch all** update local refs only. Nothing fetches on its
   own.
 - **Hide** removes a repo from the list; “Show hidden” brings it back.

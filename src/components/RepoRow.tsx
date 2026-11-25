@@ -7,6 +7,7 @@ import {
   type RepoEntry,
   type RepoStatus,
 } from "../api";
+import { BranchPicker } from "./BranchPicker";
 import { Link } from "./Link";
 
 interface Props {
@@ -26,26 +27,39 @@ export function RepoRow({ repo, done }: Props) {
   const remote = s?.remote ?? null;
 
   const details = useQuery({
-    queryKey: ["issue", remote?.project, issue?.iid, issue?.manual ? null : s?.branch],
-    queryFn: () =>
-      api.issueDetails(
-        remote!.project,
-        issue!.iid,
-        issue!.manual ? null : s!.branch,
-      ),
+    queryKey: ["issue", remote?.project, issue?.iid],
+    queryFn: () => api.issueDetails(remote!.project, issue!.iid),
     enabled: !!remote?.api && !!issue && !!token.data && token.data !== "none",
     staleTime: 60_000,
   });
 
   const refreshStatus = () =>
     qc.invalidateQueries({ queryKey: ["status", repo.path] });
+  const refreshGit = () =>
+    Promise.all([
+      refreshStatus(),
+      qc.invalidateQueries({ queryKey: ["issue"] }),
+      qc.invalidateQueries({ queryKey: ["branches", repo.path] }),
+    ]);
+  // Error from the latest git action; cleared when the next one starts.
+  const [gitError, setGitError] = useState<string | null>(null);
+  const gitAction = {
+    onMutate: () => setGitError(null),
+    onError: (e: unknown) => setGitError(errMsg(e)),
+    onSettled: refreshGit,
+  };
   const fetchRepo = useMutation({
     mutationFn: () => api.fetchRepo(repo.path),
-    onSettled: () =>
-      Promise.all([
-        refreshStatus(),
-        qc.invalidateQueries({ queryKey: ["issue"] }),
-      ]),
+    ...gitAction,
+  });
+  const pull = useMutation({
+    mutationFn: () => api.pullRepo(repo.path),
+    ...gitAction,
+  });
+  const checkout = useMutation({
+    mutationFn: (v: { name: string; remote: boolean }) =>
+      api.checkoutBranch(repo.path, v.name, v.remote),
+    ...gitAction,
   });
   const setHidden = useMutation({
     mutationFn: () => api.setHidden(repo.path, !repo.hidden),
@@ -76,17 +90,27 @@ export function RepoRow({ repo, done }: Props) {
     !!remote &&
     !!issue &&
     done.some((d) => d.project === remote.project && d.iid === issue.iid);
-  const error = [fetchRepo, setHidden, setIssue, markDone]
+  const otherError = [setHidden, setIssue, markDone]
     .map((m) => m.error)
     .find(Boolean);
+  const error = gitError ?? (otherError ? errMsg(otherError) : null);
 
   return (
     <div className={repo.hidden ? "repo hidden" : "repo"}>
       <div className="cell identity">
         <div className="name">{repo.name}</div>
-        <div className="branch">
-          {s ? (s.detached ? "detached HEAD" : s.branch) : "…"}
-        </div>
+        {s ? (
+          <BranchPicker
+            path={repo.path}
+            current={s.branch}
+            detached={s.detached}
+            defaultBranch={s.default_branch}
+            disabled={checkout.isPending}
+            onSelect={(name, remote) => checkout.mutate({ name, remote })}
+          />
+        ) : (
+          <div className="branch">…</div>
+        )}
       </div>
 
       <div className="cell badges">
@@ -133,12 +157,20 @@ export function RepoRow({ repo, done }: Props) {
         >
           {fetchRepo.isPending ? "Fetching…" : "Fetch"}
         </button>
+        <button
+          className={s?.behind ? "primary" : undefined}
+          onClick={() => pull.mutate()}
+          disabled={!s || s.detached || s.behind === null || pull.isPending}
+          title="Fast-forward this branch from its upstream (git pull --ff-only)"
+        >
+          {pull.isPending ? "Pulling…" : "Pull"}
+        </button>
         <button onClick={() => setHidden.mutate()}>
           {repo.hidden ? "Unhide" : "Hide"}
         </button>
       </div>
 
-      {error && <div className="row-error error">{errMsg(error)}</div>}
+      {error && <div className="row-error error">{error}</div>}
     </div>
   );
 }
@@ -270,7 +302,11 @@ function IssueCell({
       ) : (
         <span className="issue-link">#{issue.iid}</span>
       )}
-      {title && <span className="issue-title">{title}</span>}
+      {title && (
+        <span className="issue-title" title={title}>
+          {title}
+        </span>
+      )}
       {titleError && !title && (
         <span className="muted" title="Could not load the issue from GitLab">
           (no title)

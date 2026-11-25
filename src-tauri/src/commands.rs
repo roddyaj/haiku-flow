@@ -162,6 +162,27 @@ pub async fn fetch_repo(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn list_branches(path: String) -> Result<git::BranchList, String> {
+    spawn_blocking(move || git::list_branches(Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn checkout_branch(path: String, name: String, remote: bool) -> Result<(), String> {
+    spawn_blocking(move || git::checkout(Path::new(&path), &name, remote))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn pull_repo(path: String) -> Result<(), String> {
+    spawn_blocking(move || git::pull(Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub fn set_hidden(
     app: tauri::State<'_, AppState>,
     path: String,
@@ -185,17 +206,13 @@ pub async fn issue_details(
     app: tauri::State<'_, AppState>,
     project: String,
     iid: u64,
-    branch: Option<String>,
 ) -> Result<IssueDetails, String> {
     let config = app.config().ok_or("Not configured")?;
     let (token, _) = resolve_token(&app).await?;
     let token = token.ok_or("No GitLab token")?;
     let client = gitlab::Client::new(&config.host, &token)?;
     let issue = client.issue(&project, iid).await?;
-    let mrs = client
-        .merge_requests(&project, iid, branch.as_deref())
-        .await
-        .unwrap_or_default();
+    let mrs = client.merge_requests(&project, iid).await.unwrap_or_default();
     Ok(IssueDetails {
         title: issue.title,
         state: issue.state,
