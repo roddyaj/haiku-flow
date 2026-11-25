@@ -1,0 +1,15 @@
+# Example haiku-flow config. The app writes the real one to its config
+# directory (on macOS: ~/Library/Application Support/dev.haikuflow.app/config.toml).
+# The GitLab token is never stored here; see the README.
+
+# Folders scanned for git repos.
+roots = ["/path/to/your/repos"]
+
+# GitLab base URL. Use your own host for self-managed GitLab.
+host = "https://gitlab.com"
+
+# Directory levels below each root searched for repos. 1 = direct children only.
+scan_depth = 1
+
+# Regex run against the branch name; group 1 is the issue number.
+issue_regex = '^(\d+)-'
